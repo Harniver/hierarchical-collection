@@ -15,33 +15,13 @@ For any issues with reproducing the experiments, please contact [Giorgio Audrito
 
 ## Setup
 
-The next sections contain the setup instructions for the various supported OSs.
-**Warning:** the graphical simulations are based on OpenGL, and common Virtual Machine software (e.g., VirtualBox) has faulty support for OpenGL. Thus, running the graphical experiments in a VM is not supported: it may work for you, but it is not recommended. Batch simulations should work within VMs, and a Docker container to this aim is provided for convenience.
-
-### Docker
-
-Download Docker from [https://www.docker.com](https://www.docker.com), then you can download the Docker container from GitHub by typing the following command in a terminal:
-```
-docker pull docker.pkg.github.com/fcpp/fcpp/container:1.0
-```
-Alternatively, you can build the container yourself with the following command:
-```
-docker build -t docker.pkg.github.com/fcpp/fcpp/container:1.0 .
-```
-Once you have the Docker container locally available, type the following command to enter the container:
-```
-docker run -it --volume $PWD:/fcpp --workdir /fcpp docker.pkg.github.com/fcpp/fcpp/container:1.0 bash
-```
-and the following command to exit it:
-```
-exit
-```
+The next sections contain the setup instructions for the various supported OSs. Jump to the section dedicated to your system of choice and ignore the others.
 
 ### Windows
 
 Pre-requisites:
 - [Git Bash](https://gitforwindows.org) (for issuing unix-style commands)
-- [MinGW-w64 builds 8.1.0](http://mingw-w64.org/doku.php/download/mingw-builds)
+- [MinGW-w64](http://mingw-w64.org) ([builds 8.1.0](http://sourceforge.net/projects/mingw-w64/files/Toolchains%20targetting%20Win32/Personal%20Builds/mingw-builds/installer/mingw-w64-install.exe/download))
 - [CMake 3.9](https://cmake.org) (or higher)
 - [Asymptote](http://asymptote.sourceforge.io) (for building the plots)
 
@@ -81,7 +61,7 @@ brew install cmake asymptote
 
 ## Execution
 
-In order to execute the simulations, type one of the following commands in a terminal:
+In order to execute the simulations, type the following command in a terminal:
 ```
 > ./make.sh run -O batch        # batch simulation only
 > ./make.sh gui run -O graphic  # graphical simulation only
@@ -91,7 +71,7 @@ You should see output about building the executables, then you should get output
 
 ### Graphical User Interface
 
-Executing a graphical simulation will open a window displaying the simulation scenario, initially still: you can start running the simulation by pressing `P` (current simulated time is displayed in the bottom-left corner). While the simulation is running, network statistics will be periodically printed in the console. You can interact with the simulation through the following keys:
+Executing a graphical simulation will open a window displaying the simulation scenario, initially still: you can start running the simulation by pressing `P` (current simulated time is displayed in the bottom-left corner). While the simulation is running, network statistics will be periodically printed in the console, and be possibly aggregated in form of an Asymptote plot at simulation end. You can interact with the simulation through the following keys:
 - `Esc` to end the simulation
 - `P` to stop/resume
 - `O`/`I` to speed-up/slow-down simulated time
@@ -104,3 +84,5 @@ Executing a graphical simulation will open a window displaying the simulation sc
 - `right-click`+`mouse drag` to rotate the camera
 - `mouse scroll` for zooming in and out
 - `left-shift` added to the camera commands above for precision control
+- any other key will show/hide a legenda displaying this list
+Hovering on a node will also display its UID in the top-left corner.

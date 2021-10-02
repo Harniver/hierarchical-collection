@@ -1,9 +1,6 @@
 *.pyc
 #*
 .#*
-bazel-*
-_bazel_*
-build/
 bin/
 doc/
 output/
