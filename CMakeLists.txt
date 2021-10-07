@@ -9,5 +9,5 @@ project(
     DESCRIPTION "Experimental evaluation of the hierarchical distributed collection algorithm."
 )
 
-#fcpp_target(batch   ./run/batch.cpp   OFF)
+fcpp_target(batch   ./run/batch.cpp   OFF)
 fcpp_target(graphic ./run/graphic.cpp ON)
