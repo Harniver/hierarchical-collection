@@ -38,7 +38,7 @@ constexpr size_t discrete_log(size_t b, size_t n) {
 }
 
 //! @brief Number of devices.
-constexpr size_t devices = 1000;
+constexpr size_t devices = 100;
 
 //! @brief Hierarchy growth base.
 constexpr hops_t hierarchy_base = 2;
@@ -49,11 +49,17 @@ constexpr hops_t max_level = discrete_log(hierarchy_base, devices);
 //! @brief Communication radius.
 constexpr size_t comm = 100;
 
-//! @brief Side of the deployment area.
-constexpr size_t side = discrete_sqrt(devices * 3000);
+//! @brief Whether to put devices in a square or a line.
+constexpr bool squared = false;
+
+//! @brief X side of the deployment area.
+constexpr size_t xside = squared ? discrete_sqrt(devices * 3000) : devices * 10;
+
+//! @brief Y side of the deployment area.
+constexpr size_t yside = squared ? xside : comm;
 
 //! @brief Height of the deployment area.
-constexpr size_t height = 00;
+constexpr size_t height = 0;
 
 //! @brief Dimensionality of the space.
 constexpr size_t dim = 3;
@@ -62,7 +68,7 @@ constexpr size_t dim = 3;
 constexpr float hue_scale = 360.0f/devices;
 
 //! @brief The end of simulated time.
-constexpr size_t end_time = 200;
+constexpr size_t end_time = 500;
 
 
 //! @brief Namespace containing the libraries of coordination routines.
@@ -73,17 +79,29 @@ namespace tags {
     //! @brief Whether the simulation is synchronous.
     struct synchrony {};
 
+    //! @brief The overall leader of the network.
+    struct main_leader {};
+
+    //! @brief The distance estimates.
+    struct dist {};
+
     //! @brief The device movement speed.
     struct speed {};
 
     //! @brief The ideal result.
     struct ideal {};
 
-    //! @brief The bottom-up hierarchical election algorithm.
-    struct bottomup {};
+    //! @brief The bottom-up hierarchical election algorithm with hysteresis.
+    struct buh {};
 
-    //! @brief The top-down hierarchical election algorithm.
-    struct topdown {};
+    //! @brief The simple bottom-up hierarchical election algorithm.
+    struct bus {};
+
+    //! @brief The top-down hierarchical election algorithm with hysteresis.
+    struct tdh {};
+
+    //! @brief The simple top-down hierarchical election algorithm.
+    struct tds {};
 
     //! @brief The single-path collection algorithm.
     struct sp {};
@@ -134,13 +152,28 @@ T partitioned_idempotent_collection(ARGS, tuple<device_t, hops_t> const& ld, T c
 GEN_EXPORT(T) partitioned_idempotent_collection_t = common::export_list<tuple<device_t, hops_t>, T>;
 
 //! @brief Leader election by diameter in isolated partitions of a network.
-FUN tuple<device_t,hops_t> partitioned_diameter_election_distance(ARGS, tuple<device_t, hops_t> const& ld, hops_t diameter) { CODE
+FUN tuple<device_t,hops_t> hysteresis_diameter_election_distance(ARGS, hops_t diameter, hops_t reduced_diameter) { CODE
+    using type = tuple<device_t,hops_t>;
+    type loc(node.uid, 0);
+    get<1>(loc) -= 1;
+    return nbr(CALL, type(node.uid, 0), [&](field<type> x){
+        type r = min_hood(CALL, mux(get<1>(x) < diameter, x, loc), loc);
+        get<1>(r) += 1;
+        if (get<1>(r) > reduced_diameter and get<1>(self(CALL, x)) == 0) r = self(CALL, x);
+        return r;
+    });
+}
+FUN_EXPORT hysteresis_diameter_election_distance_t = common::export_list<tuple<device_t,hops_t>>;
+
+//! @brief Leader election by diameter in isolated partitions of a network.
+FUN tuple<device_t,hops_t> partitioned_diameter_election_distance(ARGS, tuple<device_t, hops_t> const& ld, hops_t diameter, hops_t reduced_diameter) { CODE
     using type = tuple<device_t,hops_t>;
     type loc = get<1>(ld) <= diameter ? ld : type(node.uid, 0);
     get<1>(loc) -= 1;
     return nbr(CALL, loc, [&](field<type> x){
         type r = min_hood(CALL, mux(nbr(CALL, get<0>(ld)) == get<0>(ld) and get<1>(x) < diameter, x, loc), loc);
         get<1>(r) += 1;
+        if (get<1>(r) > reduced_diameter and get<1>(self(CALL, x)) == 0) r = self(CALL, x);
         return r;
     });
 }
@@ -148,7 +181,7 @@ FUN_EXPORT partitioned_diameter_election_distance_t = common::export_list<tuple<
 
 //! @Brief Hierarchical collection algorithm.
 GEN(T, F, BOUND(F, T(T,T)))
-T hierarchical_collection(ARGS, hops_t max_level, T const& value, T const& null, F&& accumulate, bool bottomup = true, bool store = true) { CODE
+T hierarchical_collection(ARGS, hops_t max_level, T const& value, T const& null, F&& accumulate, bool bottomup, bool store, bool hysteresis) { CODE
     constexpr device_t offset = 1 << (sizeof(device_t)*CHAR_BIT-1);
     constexpr device_t mask = offset - 1;
     device_t uid = node.uid;
@@ -178,7 +211,7 @@ T hierarchical_collection(ARGS, hops_t max_level, T const& value, T const& null,
     }
     if (bottomup) {
         for (LOOP(i, 1); i <= max_level; ++i) {
-            leaders[i] = diameter_election_distance(CALL, uid, rad[i]-1);
+            leaders[i] = hysteresis_diameter_election_distance(CALL, rad[i]-1, hysteresis ? (rad[i]+1)/3 : rad[i]-1);
             if (get<0>(leaders[i]) != node.uid and uid == node.uid) {
                 uid |= offset;
                 set_level_data(i-1, get<0>(leaders[i]));
@@ -187,7 +220,7 @@ T hierarchical_collection(ARGS, hops_t max_level, T const& value, T const& null,
         if (get<0>(leaders[max_level]) == node.uid) set_level_data(max_level, devices);
     } else {
         for (LOOP(i, max_level); i > 0; --i) {
-            leaders[i] = partitioned_diameter_election_distance(CALL, leaders[i+1], rad[i]-1);
+            leaders[i] = partitioned_diameter_election_distance(CALL, leaders[i+1], rad[i]-1, hysteresis ? (rad[i]+1)/3 : rad[i]-1);
             if (get<0>(leaders[i]) == uid) {
                 uid |= offset;
                 set_level_data(i, get<0>(leaders[i+1]));
@@ -224,19 +257,24 @@ T hierarchical_collection(ARGS, hops_t max_level, T const& value, T const& null,
         } else res.clear();
     }
     if (store) node.storage(tags::count_chain{}) = counts;
-    return broadcast(CALL, get<1>(leaders[max_level]), res.empty() ? null : get<1>(res[0]));
+    return res.empty() ? null : get<1>(res[0]);
 }
-GEN_EXPORT(T) hierarchical_collection_t = common::export_list<diameter_election_distance_t<>, partitioned_diameter_election_distance_t, partitioned_idempotent_collection_t<std::vector<tuple<device_t, T>>>, broadcast_t<hops_t, T>>;
+GEN_EXPORT(T) hierarchical_collection_t = common::export_list<partitioned_idempotent_collection_t<std::vector<tuple<device_t, T>>>, hysteresis_diameter_election_distance_t, partitioned_diameter_election_distance_t>;
 
 //! @brief Main function.
 MAIN() {
-    rectangle_walk(CALL, make_vec(0,0,0), make_vec(side,side,height), node.storage(tags::speed{}), 1);
-    node.storage(tags::count<tags::bottomup>{}) = hierarchical_collection(CALL, max_level, 1, 0, [](int x, int y){ return x+y; });
-    node.storage(tags::count<tags::topdown>{}) = hierarchical_collection(CALL, max_level, 1, 0, [](int x, int y){ return x+y; }, false, false);
-    device_t leader_id = wave_election(CALL);
-    real_t leader_dist = bis_distance(CALL, node.uid == leader_id, 1, 0.6*comm);
-    node.storage(tags::count<tags::wmp>{}) = wmp_collection(CALL, leader_dist, comm, real_t(1), [](real_t x, real_t y){ return x+y; }, [](real_t x, real_t f){ return x*f; });
-    node.storage(tags::count<tags::sp>{}) = sp_collection(CALL, leader_dist, 1, 0, [](int x, int y){ return x+y; });
+    if (node.uid == 0) node.position() = 2*node.current_time() < end_time ? make_vec(0,yside/2,height/2) : make_vec(xside,yside/2,height/2);
+    else rectangle_walk(CALL, make_vec(0,0,0), make_vec(xside,yside,height), node.storage(tags::speed{}), 1);
+    node.storage(tags::count<tags::bus>{}) = hierarchical_collection(CALL, max_level, 1, 0, [](int x, int y){ return x+y; }, true,  false, false);
+    node.storage(tags::count<tags::tds>{}) = hierarchical_collection(CALL, max_level, 1, 0, [](int x, int y){ return x+y; }, false, false, false);
+    node.storage(tags::count<tags::buh>{}) = hierarchical_collection(CALL, max_level, 1, 0, [](int x, int y){ return x+y; }, true,  true,  true);
+    node.storage(tags::count<tags::tdh>{}) = hierarchical_collection(CALL, max_level, 1, 0, [](int x, int y){ return x+y; }, false, false, true);
+    device_t leader_id = node.storage(tags::main_leader{}) = wave_election(CALL);
+    real_t leader_dist = node.storage(tags::dist{}) = bis_distance(CALL, node.uid == leader_id, 1, 0.6*comm);
+    real_t wmp = wmp_collection(CALL, leader_dist, comm, real_t(1), [](real_t x, real_t y){ return x+y; }, [](real_t x, real_t f){ return x*f; });
+    real_t sp = sp_collection(CALL, leader_dist, 1, 0, [](int x, int y){ return x+y; });
+    node.storage(tags::count<tags::wmp>{}) = node.uid == leader_id ? wmp : 0;
+    node.storage(tags::count<tags::sp>{}) = node.uid == leader_id ? sp : 0;
 }
 FUN_EXPORT main_t = common::export_list<rectangle_walk_t<3>, hierarchical_collection_t<int>, wave_election_t<>, sp_collection_t<real_t, int>, wmp_collection_t<real_t>, bis_distance_t>;
 

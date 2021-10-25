@@ -29,15 +29,17 @@ using async_round_s = sequence::periodic<
     distribution::weibull_n<times_t, 10, 1, 10>,
     distribution::constant_n<times_t, end_time+2>
 >;
-using rectangle_d = distribution::rect_n<1, 0, 0, 0, side, side, height>;
+using rectangle_d = distribution::rect_n<1, 0, 0, 0, xside, yside, height>;
 //! @}
 
 using aggregator_t = aggregators<
-    count<ideal>,   aggregator::mean<double>,
-    count<sp>,      aggregator::mean<double>,
-    count<wmp>,     aggregator::mean<double>,
-    count<bottomup>,aggregator::mean<double>,
-    count<topdown>, aggregator::mean<double>
+    count<ideal>,       aggregator::sum<double>,
+    count<sp>,          aggregator::sum<double>,
+    count<wmp>,         aggregator::sum<double>,
+    count<bus>,         aggregator::sum<double>,
+    count<tds>,         aggregator::sum<double>,
+    count<buh>,         aggregator::sum<double>,
+    count<tdh>,         aggregator::sum<double>
 >;
 
 using plotter_t = plot::split<speed, plot::split<synchrony, plot::plotter<aggregator_t, plot::time, count>>>;
@@ -46,21 +48,25 @@ using plotter_t = plot::split<speed, plot::split<synchrony, plot::plotter<aggreg
 template <bool sync>
 DECLARE_OPTIONS(opt,
     tuple_store<
-        speed,          real_t,
-        count<ideal>,   int,
-        count<sp>,      int,
-        count<wmp>,     real_t,
-        count<bottomup>,int,
-        count<topdown>, int,
-        level,          int,
-        count_chain,    std::vector<std::vector<tuple<device_t, int>>>,
-        leader_chain,   std::vector<tuple<device_t, hops_t>>,
-        leader_dist,    hops_t,
-        leader,         device_t,
-        leader_col,     color,
-        personal_col,   color,
-        node_size,      double,
-        node_shape,     shape
+        speed,              real_t,
+        dist,               real_t,
+        main_leader,        device_t,
+        count<ideal>,       int,
+        count<sp>,          int,
+        count<wmp>,         real_t,
+        count<bus>,         int,
+        count<tds>,         int,
+        count<buh>,         int,
+        count<tdh>,         int,
+        level,              int,
+        count_chain,        std::vector<std::vector<tuple<device_t, int>>>,
+        leader_chain,       std::vector<tuple<device_t, hops_t>>,
+        leader_dist,        hops_t,
+        leader,             device_t,
+        leader_col,         color,
+        personal_col,       color,
+        node_size,          double,
+        node_shape,         shape
     >,
     aggregator_t,
     extra_info<synchrony, bool, speed, real_t>,
@@ -74,7 +80,7 @@ DECLARE_OPTIONS(opt,
     retain<metric::retain<2>>,
     init<
         x,              rectangle_d,
-        count<ideal>,   distribution::constant_n<int, devices>,
+        count<ideal>,   distribution::constant_n<int, 1>,
         speed,          distribution::constant_i<real_t, speed>
     >,
     dimension<dim>,
